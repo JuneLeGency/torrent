@@ -1,7 +1,6 @@
 package utHolepunch
 
 import (
-	"bytes"
 	"net/netip"
 	"testing"
 
@@ -37,6 +36,30 @@ func TestUnmarshalMsg(t *testing.T) {
 	}
 }
 
+func TestUnmarshalAuroraShortNonErrorMessages(t *testing.T) {
+	tests := []struct {
+		payload []byte
+		want    Msg
+	}{
+		{
+			payload: []byte{0, 0, 1, 2, 3, 4, 0x1a, 0xe1},
+			want:    Msg{MsgType: Rendezvous, AddrPort: netip.MustParseAddrPort("1.2.3.4:6881")},
+		},
+		{
+			payload: []byte{1, 1, 0x20, 1, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0xc8, 0xd5},
+			want:    Msg{MsgType: Connect, AddrPort: netip.MustParseAddrPort("[2001:db8::1]:51413")},
+		},
+	}
+	for _, test := range tests {
+		var got Msg
+		qt.Assert(t, qt.IsNil(got.UnmarshalBinary(test.payload)))
+		qt.Check(t, qt.Equals(got, test.want))
+		standard, err := got.MarshalBinary()
+		qt.Assert(t, qt.IsNil(err))
+		qt.Check(t, qt.Equals(len(standard), len(test.payload)+4))
+	}
+}
+
 func FuzzMsg(f *testing.F) {
 	for _, m := range exampleMsgs {
 		emb, err := m.MarshalBinary()
@@ -55,7 +78,8 @@ func FuzzMsg(f *testing.F) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(b, mb) {
+		var roundTrip Msg
+		if err := roundTrip.UnmarshalBinary(mb); err != nil || roundTrip != m {
 			t.FailNow()
 		}
 	})

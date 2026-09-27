@@ -44,7 +44,7 @@ const (
 )
 
 func (m *Msg) UnmarshalBinary(b []byte) error {
-	if len(b) < 12 {
+	if len(b) < 2 {
 		return fmt.Errorf("buffer too small to be valid")
 	}
 	m.MsgType = MsgType(b[0])
@@ -54,10 +54,13 @@ func (m *Msg) UnmarshalBinary(b []byte) error {
 	var addr netip.Addr
 	switch addrType {
 	case Ipv4:
+		if len(b) < 6 {
+			return fmt.Errorf("not enough bytes")
+		}
 		addr = netip.AddrFrom4(*(*[4]byte)(b[:4]))
 		b = b[4:]
 	case Ipv6:
-		if len(b) < 22 {
+		if len(b) < 18 {
 			return fmt.Errorf("not enough bytes")
 		}
 		addr = netip.AddrFrom16(*(*[16]byte)(b[:16]))
@@ -68,6 +71,15 @@ func (m *Msg) UnmarshalBinary(b []byte) error {
 	port := binary.BigEndian.Uint16(b[:])
 	b = b[2:]
 	m.AddrPort = netip.AddrPortFrom(addr, port)
+	// Aurora 1.1.2.34 omits the zero error code from non-error messages.
+	// Accept that dialect while keeping MarshalBinary standards-compliant.
+	if len(b) == 0 && (m.MsgType == Rendezvous || m.MsgType == Connect) {
+		m.ErrCode = 0
+		return nil
+	}
+	if len(b) < 4 {
+		return fmt.Errorf("not enough bytes for error code")
+	}
 	m.ErrCode = ErrCode(binary.BigEndian.Uint32(b[:]))
 	b = b[4:]
 	if len(b) != 0 {

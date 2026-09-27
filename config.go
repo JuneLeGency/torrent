@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"time"
 
@@ -63,12 +64,20 @@ type ClientConfig struct {
 	DataDir string `long:"data-dir" description:"directory to store downloaded torrent data"`
 	// The address to listen for new uTP and TCP BitTorrent protocol connections. DHT shares a UDP
 	// socket with uTP unless configured otherwise.
-	ListenHost              func(network string) string
-	ListenPort              int
+	ListenHost func(network string) string
+	ListenPort int
 	// cfg.NoDefaultPortForwarding aka cfg.DisableUpnp
 	NoDefaultPortForwarding bool
 	UpnpID                  string
 	DisablePEX              bool `long:"disable-pex"`
+	// Maximum number of eligible peer connections to send a ut_holepunch rendezvous message to
+	// for one target. Non-positive values preserve the default behaviour and send to every
+	// eligible relay.
+	MaxHolepunchRendezvousRelays int
+	// Called before sending ut_holepunch rendezvous messages for a target. Returning false skips
+	// the attempt. The callback is synchronous and may run while Client locks are held; it must not
+	// call back into the Client or Torrent.
+	AllowHolepunchRendezvous func(infoHash metainfo.Hash, target netip.AddrPort) bool
 
 	// Never send chunks to peers.
 	NoUpload bool `long:"no-upload"`

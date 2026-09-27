@@ -3542,7 +3542,21 @@ func addrPortProtocolStr(addrPort netip.AddrPort) string {
 }
 
 func (t *Torrent) trySendHolepunchRendezvous(addrPort netip.AddrPort) error {
-	rzsSent := 0
+	if allow := t.cl.config.AllowHolepunchRendezvous; allow != nil && !allow(t.InfoHash(), addrPort) {
+		return errors.New("holepunch rendezvous denied by policy")
+	}
+	relays := t.holepunchRendezvousRelays(addrPort)
+	for _, pc := range relays {
+		t.logger.Levelf(log.Debug, "sent ut_holepunch rendezvous message to %v for %v", pc, addrPort)
+		sendUtHolepunchMsg(pc, utHolepunch.Rendezvous, addrPort, 0)
+	}
+	if len(relays) == 0 {
+		return errors.New("no eligible relays")
+	}
+	return nil
+}
+
+func (t *Torrent) holepunchRendezvousRelays(addrPort netip.AddrPort) (ret []*PeerConn) {
 	for pc := range t.conns {
 		if !pc.supportsExtension(utHolepunch.ExtensionName) {
 			continue
@@ -3552,14 +3566,12 @@ func (t *Torrent) trySendHolepunchRendezvous(addrPort netip.AddrPort) error {
 				continue
 			}
 		}
-		t.logger.Levelf(log.Debug, "sent ut_holepunch rendezvous message to %v for %v", pc, addrPort)
-		sendUtHolepunchMsg(pc, utHolepunch.Rendezvous, addrPort, 0)
-		rzsSent++
+		ret = append(ret, pc)
+		if max := t.cl.config.MaxHolepunchRendezvousRelays; max > 0 && len(ret) >= max {
+			break
+		}
 	}
-	if rzsSent == 0 {
-		return errors.New("no eligible relays")
-	}
-	return nil
+	return
 }
 
 func (t *Torrent) getDialTimeoutUnlocked() time.Duration {
