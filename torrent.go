@@ -3167,6 +3167,27 @@ func (t *Torrent) AddWebSeeds(urls []string, opts ...AddWebSeedsOpt) {
 	}
 }
 
+// RemoveWebSeeds removes matching WebSeed URLs, cancels their active requests,
+// and returns the number removed. Unknown and duplicate URLs are ignored.
+func (t *Torrent) RemoveWebSeeds(urls []string) (removed int) {
+	t.cl.lock()
+	defer t.cl.unlock()
+	for _, u := range urls {
+		urlKey := webseedUrlKey(unique.Make(u))
+		ws, ok := t.webSeeds[urlKey]
+		if !ok {
+			continue
+		}
+		// Delete first so request updates cannot select the peer again while
+		// close/cancellation callbacks are running.
+		delete(t.webSeeds, urlKey)
+		ws.peer.close()
+		ws.cancelAllRequests()
+		removed++
+	}
+	return
+}
+
 // Returns true if the WebSeed was newly added with the provided configuration.
 func (t *Torrent) addWebSeed(url string, opts ...AddWebSeedsOpt) bool {
 	if t.cl.config.DisableWebseeds {
