@@ -3162,8 +3162,15 @@ func WebSeedResponseBodyRateLimiter(rl *rate.Limiter) AddWebSeedsOpt {
 func (t *Torrent) AddWebSeeds(urls []string, opts ...AddWebSeedsOpt) {
 	t.cl.lock()
 	defer t.cl.unlock()
+	added := false
 	for _, u := range urls {
-		t.addWebSeed(u, opts...)
+		if t.addWebSeed(u, opts...) {
+			added = true
+		}
+	}
+	if added {
+		// New webseeds would otherwise idle until the periodic update timer.
+		t.cl.updateWebseedRequestsWithReason("Torrent.AddWebSeeds")
 	}
 }
 
