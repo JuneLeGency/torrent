@@ -442,7 +442,14 @@ func (cl *Client) yieldKeyAndValue(
 ) bool {
 	t := key.t
 	url := key.url
-	hostKey := t.webSeeds[url].hostKey
+	ws := t.webSeeds[url]
+	if ws == nil {
+		// RemoveWebSeeds already dropped this WebSeed; its cancelled request
+		// stays registered until its own goroutine cleans up. Skip it, as the
+		// Torrent-side iteration no longer sees it either.
+		return true
+	}
+	hostKey := ws.hostKey
 	// Don't spawn requests before old requests are cancelled.
 	if false {
 		if ar.cancelled.Load() {
