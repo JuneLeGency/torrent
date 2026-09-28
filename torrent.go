@@ -1588,6 +1588,11 @@ func (t *Torrent) updatePiecePriorityNoRequests(piece pieceIndex) (updateRequest
 		if !t.disableTriggers {
 			// This used to happen after updating requests, but I don't think the order matters.
 			t.onPiecePendingTriggers(piece)
+			// WebSeeds known before pieces were wanted (magnet ws=, spec merge)
+			// would otherwise idle until the periodic webseed update timer.
+			if len(t.webSeeds) != 0 {
+				t.cl.updateWebseedRequestsWithReason("Torrent.pendingPiecesChanged")
+			}
 		}
 		// Something was added or removed.
 		updateRequests = true
