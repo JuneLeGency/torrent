@@ -51,6 +51,11 @@ func (fst fileTorrentImplIO) ReadAt(b []byte, off int64) (n int, err error) {
 	for i, e := range fst.fts.segmentLocater.LocateIter(
 		segments.Extent{off, int64(len(b))},
 	) {
+		if e.Length == 0 {
+			// Zero-length files hold no bytes; opening them would try to
+			// mmap an empty file, which fails with EINVAL.
+			continue
+		}
 		n1, err1 := fst.readFileAt(fst.fts.file(i), b[:e.Length], e.Start)
 		n += n1
 		b = b[n1:]
@@ -79,6 +84,10 @@ func (fst fileTorrentImplIO) WriteAt(p []byte, off int64) (n int, err error) {
 	for i, e := range fst.fts.segmentLocater.LocateIter(
 		segments.Extent{off, int64(len(p))},
 	) {
+		if e.Length == 0 {
+			// See ReadAt: nothing to write, and mapping an empty file fails.
+			continue
+		}
 		var f fileWriter
 		f, err = fst.fts.openForWrite(fst.fts.file(i))
 		if err != nil {
